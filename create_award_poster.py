@@ -7,6 +7,7 @@ portrait in ``images/personal.jpg`` and exports it to
 
 from __future__ import annotations
 
+import argparse
 import math
 import random
 from pathlib import Path
@@ -15,8 +16,8 @@ from typing import Final
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 ROOT: Final[Path] = Path(__file__).resolve().parent
-SOURCE_IMAGE: Final[Path] = ROOT / "images" / "personal.jpg"
-OUTPUT_IMAGE: Final[Path] = ROOT / "images" / "xibao_2026_mdrt.png"
+DEFAULT_SOURCE_IMAGE: Final[Path] = ROOT / "images" / "personal.jpg"
+DEFAULT_OUTPUT_IMAGE: Final[Path] = ROOT / "images" / "xibao_2026_mdrt.png"
 
 CANVAS_WIDTH: Final[int] = 1242
 CANVAS_HEIGHT: Final[int] = 2208
@@ -143,14 +144,14 @@ def rounded_mask(size: tuple[int, int], radius: int) -> Image.Image:
     return mask
 
 
-def build_photo_card() -> Image.Image:
+def build_photo_card(source_image: Path) -> Image.Image:
     """Create framed portrait card from source image.
 
     Returns:
         RGBA card image with golden border and rounded portrait.
     """
-    if not SOURCE_IMAGE.exists():
-        raise FileNotFoundError(f"Source image not found: {SOURCE_IMAGE}")
+    if not source_image.exists():
+        raise FileNotFoundError(f"Source image not found: {source_image}")
 
     card_w, card_h = 760, 1120
     frame = Image.new("RGBA", (card_w, card_h), (0, 0, 0, 0))
@@ -173,7 +174,7 @@ def build_photo_card() -> Image.Image:
         fill=(255, 255, 255, 255),
     )
 
-    src = Image.open(SOURCE_IMAGE).convert("RGB")
+    src = Image.open(source_image).convert("RGB")
     portrait = ImageOps.fit(src, (card_w - 56, card_h - 56), centering=(0.5, 0.25))
     portrait = portrait.convert("RGBA")
     mask = rounded_mask(portrait.size, radius=34)
@@ -205,8 +206,14 @@ def draw_centered_text(
     )
 
 
-def create_poster() -> None:
-    """Generate and save the final award poster."""
+def create_poster(source_image: Path, output_image: Path, display_name: str) -> None:
+    """Generate and save the final award poster.
+
+    Args:
+        source_image: Input portrait file path.
+        output_image: Output poster file path.
+        display_name: Name shown on the name ribbon.
+    """
     bg = draw_vertical_gradient(CANVAS_WIDTH, CANVAS_HEIGHT).convert("RGBA")
 
     # Top glow.
@@ -259,7 +266,7 @@ def create_poster() -> None:
         stroke_width=2,
     )
 
-    photo_card = build_photo_card()
+    photo_card = build_photo_card(source_image=source_image)
 
     # Drop shadow under photo card.
     shadow = Image.new("RGBA", photo_card.size, (0, 0, 0, 0))
@@ -287,11 +294,11 @@ def create_poster() -> None:
         outline=(245, 204, 114, 255),
         width=5,
     )
-    name_bbox = rdraw.textbbox((0, 0), "XIA LING", font=english_name_font)
+    name_bbox = rdraw.textbbox((0, 0), display_name, font=english_name_font)
     name_w = name_bbox[2] - name_bbox[0]
     rdraw.text(
         ((ribbon_w - name_w) / 2, 13),
-        "XIA LING",
+        display_name,
         font=english_name_font,
         fill=(255, 240, 195, 255),
     )
@@ -324,10 +331,43 @@ def create_poster() -> None:
         fill=(255, 240, 200, 240),
     )
 
-    OUTPUT_IMAGE.parent.mkdir(parents=True, exist_ok=True)
-    bg.convert("RGB").save(OUTPUT_IMAGE, format="PNG", optimize=True)
+    output_image.parent.mkdir(parents=True, exist_ok=True)
+    bg.convert("RGB").save(output_image, format="PNG", optimize=True)
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments for poster generation.
+
+    Returns:
+        Parsed command namespace.
+    """
+    parser = argparse.ArgumentParser(description="Generate a 2026 MDRT xibao poster.")
+    parser.add_argument(
+        "--input",
+        type=Path,
+        default=DEFAULT_SOURCE_IMAGE,
+        help="Input portrait image path.",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_OUTPUT_IMAGE,
+        help="Output poster image path.",
+    )
+    parser.add_argument(
+        "--name",
+        type=str,
+        default="XIA LING",
+        help="Display name to print on poster.",
+    )
+    return parser.parse_args()
 
 
 if __name__ == "__main__":
-    create_poster()
-    print(f"Poster generated: {OUTPUT_IMAGE}")
+    args = parse_args()
+    create_poster(
+        source_image=args.input,
+        output_image=args.output,
+        display_name=args.name.strip() or "XIA LING",
+    )
+    print(f"Poster generated: {args.output}")
